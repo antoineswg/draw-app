@@ -3,7 +3,9 @@ import { useDrawingStore } from '../../store/useDrawingStore';
 export function DrawToolbar() {
   const { strokeWidth, setStrokeWidth, strokeColor, setStrokeColor } = useDrawingStore();
 
+  // épaisseurs disponibles en pixels
   const widthOptions = [2, 4, 8, 16];
+  // palette de couleurs disponibles
   const colorOptions = [
     { name: 'Black', value: '#000000' },
     { name: 'Red', value: '#ff0000' },
@@ -40,6 +42,7 @@ export function DrawToolbar() {
         <div className="flex gap-2">
           {colorOptions.map((color) => (
             <label key={color.value} className="cursor-pointer" title={color.name}>
+              {/* input caché pour gérer la sélection */}
               <input
                 type="radio"
                 name="strokeColor"
@@ -48,6 +51,7 @@ export function DrawToolbar() {
                 onChange={(e) => setStrokeColor(e.target.value)}
                 className="sr-only"
               />
+              {/* cercle coloré avec effet visuel sur la couleur active */}
               <div
                 className={`w-8 h-8 rounded-full border-2 ${
                   strokeColor === color.value ? 'border-gray-800 scale-110' : 'border-gray-300'
