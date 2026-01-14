@@ -1,3 +1,5 @@
+import { useUserListStore } from '../../store/useUserListStore';
+
 export type UserListProps = {
   users: {
     id: string;
@@ -7,6 +9,9 @@ export type UserListProps = {
 }
 
 export function UserList({ users }: UserListProps){
+  // récupération de l'état de dessin des utilisateurs
+  const drawingUsers = useUserListStore((state) => state.drawingUsers);
+  
   return (
     <div className="flex flex-col gap-3">
       <span className="font-bold">Liste des utilisateurs: <div className="badge badge-soft badge-info">{users.length}</div></span>
@@ -16,8 +21,12 @@ export function UserList({ users }: UserListProps){
           users.map((user) => (
             <li className="list-row items-center" key={user.id}>
               <div><img className="size-8 rounded-box" src={user.avatar} /></div>
-              <div>
+              <div className="flex items-center gap-2 flex-1">
                 <div className="text-xs uppercase font-semibold">{user.username}</div>
+                {/* affichage du badge "dessine" si l'utilisateur est actif */}
+                {drawingUsers.get(user.id) && (
+                  <span className="badge badge-soft badge-success text-xs">Dessine</span>
+                )}
               </div>
             </li>
           ))

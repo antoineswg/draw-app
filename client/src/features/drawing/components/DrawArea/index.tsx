@@ -3,6 +3,7 @@ import { getCoordinatesRelativeToElement } from "../../utils/getCanvasCoordinate
 import { useMyUserStore } from "../../../user/store/useMyUserStore";
 import { SocketManager } from "../../../../shared/services/SocketManager";
 import { useDrawingStore } from "../../store/useDrawingStore";
+import { useUserListStore } from "../../../user/store/useUserListStore";
 import styles from './DrawArea.module.css';
 
 /**
@@ -278,6 +279,8 @@ export function DrawArea() {
       if (data.userId === myUser?.id) return;
       const absoluteCoords = relativeToAbsolute(data.x, data.y);
       otherUsersLastPointRef.current.set(data.userId, { x: absoluteCoords.x, y: absoluteCoords.y, width: data.strokeWidth || 2, color: data.color || '#000000' });
+      // marque l'utilisateur comme dessinant
+      useUserListStore.getState().setUserDrawing(data.userId, true);
     };
 
     const handleServerDrawMove = (payload: unknown) => {
@@ -321,6 +324,8 @@ export function DrawArea() {
       }
       
       otherUsersLastPointRef.current.delete(data.userId);
+      // marque l'utilisateur comme ne dessinant plus
+      useUserListStore.getState().setUserDrawing(data.userId, false);
     };
 
     const handleServerClearCanvas = () => {
