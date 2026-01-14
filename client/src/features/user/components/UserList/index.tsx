@@ -11,6 +11,8 @@ export type UserListProps = {
 export function UserList({ users }: UserListProps){
   // récupération de l'état de dessin des utilisateurs
   const drawingUsers = useUserListStore((state) => state.drawingUsers);
+  // récupération des couleurs de tracé des utilisateurs
+  const userStrokeColor = useUserListStore((state) => state.userStrokeColor);
   
   return (
     <div className="flex flex-col gap-3">
@@ -20,7 +22,15 @@ export function UserList({ users }: UserListProps){
         {users.length > 0 ? 
           users.map((user) => (
             <li className="list-row items-center" key={user.id}>
-              <div><img className="size-8 rounded-box" src={user.avatar} /></div>
+              <div className="relative">
+                <img className="size-8 rounded-box" src={user.avatar} />
+                {/* pastille de couleur en bas à droite de l'avatar */}
+                <div 
+                  className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-white" 
+                  style={{ backgroundColor: userStrokeColor.get(user.id) || '#000000' }}
+                  title={`Couleur: ${userStrokeColor.get(user.id) || '#000000'}`}
+                />
+              </div>
               <div className="flex items-center gap-2 flex-1">
                 <div className="text-xs uppercase font-semibold">{user.username}</div>
                 {/* affichage du badge "dessine" si l'utilisateur est actif */}

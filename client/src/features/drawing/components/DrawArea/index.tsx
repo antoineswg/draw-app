@@ -235,6 +235,11 @@ export function DrawArea() {
     const relativeCoords = absoluteToRelative(coordinates.x, coordinates.y);
     SocketManager.emit('draw:start', { x: relativeCoords.x, y: relativeCoords.y, color: strokeColor, strokeWidth });
 
+    // enregistre la couleur de l'utilisateur local
+    if (myUser?.id) {
+      useUserListStore.getState().setUserStrokeColor(myUser.id, strokeColor);
+    }
+
     isDrawingRef.current = true;
     lastPointRef.current = { x: coordinates.x, y: coordinates.y };
     currentStrokePointsRef.current = [{ x: coordinates.x, y: coordinates.y }];
@@ -317,6 +322,8 @@ export function DrawArea() {
       otherUsersLastPointRef.current.set(data.userId, { x: absoluteCoords.x, y: absoluteCoords.y, width: data.strokeWidth || 2, color: data.color || '#000000' });
       // marque l'utilisateur comme dessinant
       useUserListStore.getState().setUserDrawing(data.userId, true);
+      // enregistre la couleur de tracé de l'utilisateur
+      useUserListStore.getState().setUserStrokeColor(data.userId, data.color || '#000000');
     };
 
     const handleServerDrawMove = (payload: unknown) => {
