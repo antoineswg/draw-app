@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { getCoordinatesRelativeToElement } from "../../utils/getCanvasCoordinates";
 import { useMyUserStore } from "../../../user/store/useMyUserStore";
+import { SocketManager } from "../../../../shared/services/SocketManager";
+import { useDrawingStore } from "../../store/useDrawingStore";
 import styles from './DrawArea.module.css';
 
 /**
@@ -28,8 +30,16 @@ export function DrawArea() {
   */
   const canvasRef = useRef<HTMLCanvasElement>(null); /** Les updates sur ces constantes ne provoqueront pas re-render */
   const parentRef = useRef<HTMLDivElement>(null); /** Les updates sur ces constantes ne provoqueront pas re-render */
+  const isDrawingRef = useRef<boolean>(false); /** Pour savoir si on est en train de dessiner */
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null); /** Pour stocker le dernier point */
+  const currentStrokePointsRef = useRef<{ x: number; y: number }[]>([]); /** Pour stocker les points du tracé en cours */
+  const currentStrokeWidthRef = useRef<number>(2); /** Pour stocker la largeur du tracé en cours */
+  const currentStrokeColorRef = useRef<string>('#000000'); /** Pour stocker la couleur du tracé en cours */
+  const otherUsersLastPointRef = useRef<Map<string, { x: number; y: number; width: number; color: string }>>(new Map());
+  const resizeTimerRef = useRef<number | null>(null);
 
   const { myUser } = useMyUserStore();
+  const { strokeWidth, strokeColor } = useDrawingStore();
   const canUserDraw = useMemo(() => myUser !== null, [myUser]); 
   
   /**
@@ -38,15 +48,69 @@ export function DrawArea() {
    * ===================
    */
 
-  /** Pour récupérer les coordonnées d'un event en prenant en compte le placement de notre canvas */
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
     return getCoordinatesRelativeToElement(e.clientX, e.clientY, canvasRef.current);
-  } 
+  }
 
-  /**
-   * Conseil @todo: 
-   * Faîtes une fontion qui va venir dessiner en fonction de coordonées que vous passez
-   */
+  const absoluteToRelative = useCallback((x: number, y: number) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: x / rect.width,
+      y: y / rect.height
+    };
+  }, []);
+
+  const relativeToAbsolute = useCallback((x: number, y: number) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
+    const rect = canvasRef.current.getBoundingClientRect();
+    return {
+      x: x * rect.width,
+      y: y * rect.height
+    };
+  }, []); 
+
+  const clearCanvas = useCallback(() => {
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    ctx.clearRect(0, 0, rect.width, rect.height);
+  }, []);
+
+  const drawLine = useCallback((startX: number, startY: number, endX: number, endY: number, width?: number, color?: string) => {
+    if (!canvasRef.current) return;
+    
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.strokeStyle = color ?? strokeColor;
+    ctx.lineWidth = width ?? strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  }, [strokeWidth, strokeColor]);
+
+  const redrawAllStrokes = useCallback((strokes: Array<{ points: Array<{ x: number; y: number }>; strokeWidth: number; color: string }>) => {
+    clearCanvas();
+    strokes.forEach(stroke => {
+      for (let i = 0; i < stroke.points.length - 1; i++) {
+        const start = relativeToAbsolute(stroke.points[i].x, stroke.points[i].y);
+        const end = relativeToAbsolute(stroke.points[i + 1].x, stroke.points[i + 1].y);
+        drawLine(start.x, start.y, end.x, end.y, stroke.strokeWidth, stroke.color);
+      }
+    });
+  }, [clearCanvas, relativeToAbsolute, drawLine]);
+
+  const fetchStrokes = useCallback(async () => {
+    const response = await SocketManager.get('strokes');
+    if (response?.strokes) {
+      redrawAllStrokes(response.strokes as Array<{ points: Array<{ x: number; y: number }>; strokeWidth: number; color: string }>);
+    }
+  }, [redrawAllStrokes]);
 
   /**
    * ===================
@@ -55,11 +119,72 @@ export function DrawArea() {
    */
   
   const onMouseMove = useCallback((e: MouseEvent) => {
-    console.log('onMouseMove', e);
-  }, []);
+    if (!isDrawingRef.current || !canvasRef.current) return;
 
-  const onMouseUp = useCallback((e: MouseEvent) => {
-    console.log('onMouseUp', e);
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (lastPointRef.current && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        const startX = lastPointRef.current.x;
+        const startY = lastPointRef.current.y;
+        const width = currentStrokeWidthRef.current;
+        const color = currentStrokeColorRef.current;
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    }
+
+    currentStrokePointsRef.current.push({ x, y });
+
+    const relativeCoords = absoluteToRelative(x, y);
+    SocketManager.emit('draw:move', { x: relativeCoords.x, y: relativeCoords.y });
+
+    lastPointRef.current = { x, y };
+  }, [absoluteToRelative]);
+
+  const onMouseUp = useCallback(() => {
+    if (!isDrawingRef.current || !canvasRef.current) return;
+
+    if (lastPointRef.current && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        const { x, y } = lastPointRef.current;
+        const width = currentStrokeWidthRef.current;
+        const color = currentStrokeColorRef.current;
+        
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 0.1, y + 0.1);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    }
+
+    SocketManager.emit('draw:end', {});
+
+    isDrawingRef.current = false;
+    lastPointRef.current = null;
+    currentStrokePointsRef.current = [];
+
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mouseup', onMouseUp);
+    }
   }, []);
 
   const onMouseDown: React.MouseEventHandler<HTMLCanvasElement> = useCallback((e) => {
@@ -76,13 +201,23 @@ export function DrawArea() {
     /** Transformation des coordoonées mouse (relatives à la page) vers des coordonnées relative au canvas  */
     const coordinates = getCanvasCoordinates(e);
 
-    /** Ressource: https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API */
-    /** On commence par un "beginPath" pour débuter le tracé */
-    ctx.beginPath();
+    const relativeCoords = absoluteToRelative(coordinates.x, coordinates.y);
+    SocketManager.emit('draw:start', { x: relativeCoords.x, y: relativeCoords.y, color: strokeColor, strokeWidth });
 
-    /** Dans ce 1er exemple (on changera par la suite), j'affiche des points là où je fais un mousedown, donc j'ai choisi d'utiliser la méthode arc : https://developer.mozilla.org/fr/docs/Web/API/CanvasRenderingContext2D/arc */
-    ctx.arc(coordinates.x, coordinates.y, 2, 0, Math.PI * 2);
-    ctx.fill();
+    isDrawingRef.current = true;
+    lastPointRef.current = { x: coordinates.x, y: coordinates.y };
+    currentStrokePointsRef.current = [{ x: coordinates.x, y: coordinates.y }];
+    currentStrokeWidthRef.current = strokeWidth;
+    currentStrokeColorRef.current = strokeColor;
+
+    ctx.beginPath();
+    ctx.moveTo(coordinates.x, coordinates.y);
+    ctx.lineTo(coordinates.x, coordinates.y);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
 
     /**
     * On pourrait ajouter le onMouseMove, onMouseUp directement dans le JSX de notre canvas, mais les ajouter à la volée ici est plus flexible. On pourra retirer ces events onMouseUp
@@ -90,7 +225,7 @@ export function DrawArea() {
     */
     canvasRef.current?.addEventListener('mousemove', onMouseMove);
     canvasRef.current?.addEventListener('mouseup', onMouseUp);
-  }, [canUserDraw, onMouseMove, onMouseUp]);
+  }, [canUserDraw, getCanvasCoordinates, absoluteToRelative, strokeWidth, strokeColor]);
 
   /**
    * ===================
@@ -133,6 +268,77 @@ export function DrawArea() {
    * ===================
   */
 
+  useEffect(() => {
+    fetchStrokes();
+  }, [fetchStrokes]);
+
+  useEffect(() => {
+    const handleServerDrawStart = (payload: unknown) => {
+      const data = payload as { userId: string; x: number; y: number; strokeWidth: number; color: string };
+      if (data.userId === myUser?.id) return;
+      const absoluteCoords = relativeToAbsolute(data.x, data.y);
+      otherUsersLastPointRef.current.set(data.userId, { x: absoluteCoords.x, y: absoluteCoords.y, width: data.strokeWidth || 2, color: data.color || '#000000' });
+    };
+
+    const handleServerDrawMove = (payload: unknown) => {
+      const data = payload as { userId: string; x: number; y: number };
+      if (data.userId === myUser?.id) return;
+      const absoluteCoords = relativeToAbsolute(data.x, data.y);
+      const lastPoint = otherUsersLastPointRef.current.get(data.userId);
+      if (lastPoint && canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.beginPath();
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+          ctx.lineTo(absoluteCoords.x, absoluteCoords.y);
+          ctx.strokeStyle = lastPoint.color;
+          ctx.lineWidth = lastPoint.width;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+      }
+      otherUsersLastPointRef.current.set(data.userId, { x: absoluteCoords.x, y: absoluteCoords.y, width: lastPoint?.width || 2, color: lastPoint?.color || '#000000' });
+    };
+
+    const handleServerDrawEnd = (payload: unknown) => {
+      const data = payload as { userId: string };
+      if (data.userId === myUser?.id) return;
+      
+      const lastPoint = otherUsersLastPointRef.current.get(data.userId);
+      if (lastPoint && canvasRef.current) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.beginPath();
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+          ctx.lineTo(lastPoint.x + 0.1, lastPoint.y + 0.1);
+          ctx.strokeStyle = lastPoint.color;
+          ctx.lineWidth = lastPoint.width;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+      }
+      
+      otherUsersLastPointRef.current.delete(data.userId);
+    };
+
+    const handleServerClearCanvas = () => {
+      clearCanvas();
+    };
+
+    SocketManager.listen('server:draw:start', handleServerDrawStart);
+    SocketManager.listen('server:draw:move', handleServerDrawMove);
+    SocketManager.listen('server:draw:end', handleServerDrawEnd);
+    SocketManager.listen('server:clear:canvas', handleServerClearCanvas);
+
+    return () => {
+      SocketManager.off('server:draw:start', handleServerDrawStart);
+      SocketManager.off('server:draw:move', handleServerDrawMove);
+      SocketManager.off('server:draw:end', handleServerDrawEnd);
+      SocketManager.off('server:clear:canvas', handleServerClearCanvas);
+    };
+  }, [myUser?.id, relativeToAbsolute, clearCanvas]);
 
   useEffect(() => {
     /**
@@ -140,6 +346,14 @@ export function DrawArea() {
      */
     const resizeObserver = new ResizeObserver(() => {
       setCanvasDimensions();
+      
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
+      
+      resizeTimerRef.current = setTimeout(() => {
+        fetchStrokes();
+      }, 300);
     });
     
     /** On observe les changements de taille sur l'élément parent */
@@ -153,9 +367,13 @@ export function DrawArea() {
     return () => {
       /** On veut disconnect pour éviter d'avoir plusieurs resizeObservers ou d'avoir un resizeObserver sur un élément qui n'existe plus  */
       resizeObserver.disconnect();
+      
+      if (resizeTimerRef.current) {
+        clearTimeout(resizeTimerRef.current);
+      }
     };
 
-  }, [setCanvasDimensions]);
+  }, [setCanvasDimensions, fetchStrokes]);
 
   return (
     <div className={[styles.drawArea, 'w-full', 'h-full', 'overflow-hidden', 'flex', 'items-center'].join(' ')} ref={parentRef}>

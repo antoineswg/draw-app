@@ -17,8 +17,8 @@ export const useJoinMyUser = () => {
   }, [setMyUser]);
 
 
-  const joinMyUser = () => {
-    SocketManager.emit("myUser:join", createMyUser() );
+  const joinMyUser = (username: string) => {
+    SocketManager.emit("myUser:join", createMyUser(username) );
   }
   
   return { joinMyUser };

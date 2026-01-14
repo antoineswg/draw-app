@@ -93,7 +93,7 @@ export const handleAppForClient = (app: ReturnType<typeof express>, io: Server, 
     emitToAll(SERVER_TO_CLIENT_EVENTS_NAMES.USERS_UPDATED, { users: getUsers() });
 
     
-    emitToAllButSender(SERVER_TO_CLIENT_EVENTS_NAMES.DRAW_START, stroke);
+    emitToAllButSender(SERVER_TO_CLIENT_EVENTS_NAMES.DRAW_START, { userId, x, y, strokeWidth, color });
   });
 
   socket.on(CLIENT_TO_SERVER_EVENTS_NAMES.DRAW_MOVE, (data: { x: number; y: number }) => {
@@ -105,7 +105,7 @@ export const handleAppForClient = (app: ReturnType<typeof express>, io: Server, 
     const stroke = updateDrawStroke(userId, { x, y });
     
     if (stroke) {
-      emitToAllButSender(CLIENT_TO_SERVER_EVENTS_NAMES.DRAW_MOVE, stroke);
+      emitToAllButSender(SERVER_TO_CLIENT_EVENTS_NAMES.DRAW_MOVE, { userId, x, y });
     }
   });
 
@@ -117,8 +117,17 @@ export const handleAppForClient = (app: ReturnType<typeof express>, io: Server, 
     const stroke = completeDrawStroke(userId);
     
     if (stroke) {
-      emitToAllButSender(CLIENT_TO_SERVER_EVENTS_NAMES.DRAW_END, stroke);
+      emitToAllButSender(SERVER_TO_CLIENT_EVENTS_NAMES.DRAW_END, { userId });
     }
+  });
+
+  socket.on(CLIENT_TO_SERVER_EVENTS_NAMES.CLEAR_CANVAS, () => {
+    logListen(CLIENT_TO_SERVER_EVENTS_NAMES.CLEAR_CANVAS, {});
+    
+    const { clearAllStrokes } = require('./draw');
+    clearAllStrokes();
+    
+    emitToAll(SERVER_TO_CLIENT_EVENTS_NAMES.CLEAR_CANVAS, {});
   });
 
   app.get(ENDPOINTS.GET_USERS, (req, res) => {

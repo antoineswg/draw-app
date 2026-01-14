@@ -14,6 +14,7 @@ export const CLIENT_TO_SERVER_EVENTS_NAMES = {
   DRAW_START: 'draw:start',
   DRAW_MOVE: 'draw:move',
   DRAW_END: 'draw:end',
+  CLEAR_CANVAS: 'clear:canvas',
 }
 
 export const SERVER_TO_CLIENT_EVENTS_NAMES = {
@@ -22,7 +23,8 @@ export const SERVER_TO_CLIENT_EVENTS_NAMES = {
   USER_JOINED: 'user:joined',
   MYUSER_EDITED: 'myUser:edited',
   USERS_UPDATED: 'users:updated',
-  DRAW_START: 'draw:start',
-  DRAW_MOVE: 'draw:move',
-  DRAW_END: 'draw:end',
+  DRAW_START: 'server:draw:start',
+  DRAW_MOVE: 'server:draw:move',
+  DRAW_END: 'server:draw:end',
+  CLEAR_CANVAS: 'server:clear:canvas',
 }

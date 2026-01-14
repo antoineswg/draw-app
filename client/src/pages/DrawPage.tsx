@@ -5,17 +5,21 @@ import { Instructions } from '../shared/components/Instructions/Instructions'
 import { getInstructions } from '../shared/utils/get-instructions'
 import { UserList } from '../features/user/components/UserList'
 import { DrawArea } from '../features/drawing/components/DrawArea'
+import { DrawToolbar } from '../features/drawing/components/DrawToolbar'
 import { useUpdatedUserList } from '../features/user/hooks/useUpdatedUserList'
 import { useJoinMyUser } from '../features/user/hooks/useJoinMyUser'
+import { SocketManager } from '../shared/services/SocketManager'
+import { useMyUserStore } from '../features/user/store/useMyUserStore'
 
 function DrawPage() {
   const { joinMyUser }  = useJoinMyUser();
   const { userList } = useUpdatedUserList();
+  const myUser = useMyUserStore((state) => state.myUser);
 
   return (
     <DrawLayout
       topArea={<AppHeader 
-        onClickJoin={() => joinMyUser()}
+        onClickJoin={(username) => joinMyUser(username)}
       />}
       rightArea={
         <>
@@ -23,21 +27,32 @@ function DrawPage() {
             {getInstructions('user-list')}
           </Instructions> */}
           <UserList users={userList} />
+          {myUser && (
+            <button 
+              onClick={() => {
+                SocketManager.emit('clear:canvas');
+              }}
+              className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 w-full"
+            >
+              Clear Canvas
+            </button>
+          )}
         </>
       }
       bottomArea={
         <>
-          <Instructions>
+          <DrawToolbar />
+          {/* <Instructions>
             {getInstructions('toolbar')}
-          </Instructions>
+          </Instructions> */}
         </>
       }
     >
       <DrawArea />
       {/* <TestDrawArea /> */}
-      <Instructions className="max-w-xs">
+      {/* <Instructions className="max-w-xs">
         {getInstructions('draw-area')}
-      </Instructions>
+      </Instructions> */}
       
     </DrawLayout>
   )

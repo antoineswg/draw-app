@@ -13,6 +13,7 @@ export type SocketClientToServerEvents = {
   'draw:start': (data: unknown) => void; /* @todo */
   'draw:move': (data: unknown) => void; /* @todo */
   'draw:end': (data: unknown) => void; /* @todo */
+  'clear:canvas': () => void;
 }
 
 // Événements reçus du serveur vers le client
@@ -27,6 +28,7 @@ export type SocketServerToClientEvents = {
 // @todo: ajouter les types pour les traits de dessin
   'server:draw:end':(payload: unknown) => void; 
 // @todo: ajouter les types pour les traits de dessin
+  'server:clear:canvas': (payload: unknown) => void;
 }
 
 export type GetEndpoints = {
@@ -46,7 +48,7 @@ class _SocketManager {
     const socketManagerInstance = io(VITE_SOCKET_SERVER_URL);
    
     socketManagerInstance.on("connect", () => {
-      console.log(`%c SocketProvider: Connected to Socket ${VITE_SOCKET_SERVER_URL} with ID ${socketManagerInstance?.id}`, 'color: green');
+      // console.log(`%c SocketProvider: Connected to Socket ${VITE_SOCKET_SERVER_URL} with ID ${socketManagerInstance?.id}`, 'color: green');
       this.socketManager = socketManagerInstance;
 
       useSocketStore.setState({ isConnectedToServer: true });
@@ -84,7 +86,7 @@ class _SocketManager {
     eventName: K, 
     ...args: Parameters<SocketClientToServerEvents[K]>
   ): void {
-    console.log('EMIT', { eventName, args, socketManger: this.socketManager });
+    // console.log('EMIT', { eventName, args, socketManger: this.socketManager });
     if (!this.socketManager) {
       console.warn(`Cannot emit ${String(eventName)}: Socket not connected`);
       return;
