@@ -23,7 +23,11 @@ export function UserList({ users }: UserListProps){
           users.map((user) => (
             <li className="list-row items-center" key={user.id}>
               <div className="relative">
-                <img className="size-8 rounded-box" src={user.avatar} />
+                {/* border verte si l'utilisateur dessine */}
+                <img 
+                  className={`size-8 rounded-box ${drawingUsers.get(user.id) ? 'ring-2 ring-green-500' : ''}`} 
+                  src={user.avatar} 
+                />
                 {/* pastille de couleur en bas à droite de l'avatar */}
                 <div 
                   className="absolute -bottom-1 -right-1 size-4 rounded-full border-2 border-white" 
@@ -33,10 +37,6 @@ export function UserList({ users }: UserListProps){
               </div>
               <div className="flex items-center gap-2 flex-1">
                 <div className="text-xs uppercase font-semibold">{user.username}</div>
-                {/* affichage du badge "dessine" si l'utilisateur est actif */}
-                {drawingUsers.get(user.id) && (
-                  <span className="badge badge-soft badge-success text-xs">Dessine</span>
-                )}
               </div>
             </li>
           ))

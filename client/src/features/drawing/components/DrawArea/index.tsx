@@ -207,6 +207,11 @@ export function DrawArea() {
 
     SocketManager.emit('draw:end', {});
 
+    // marque l'utilisateur local comme ne dessinant plus
+    if (myUser?.id) {
+      useUserListStore.getState().setUserDrawing(myUser.id, false);
+    }
+
     isDrawingRef.current = false;
     lastPointRef.current = null;
     currentStrokePointsRef.current = [];
@@ -235,9 +240,10 @@ export function DrawArea() {
     const relativeCoords = absoluteToRelative(coordinates.x, coordinates.y);
     SocketManager.emit('draw:start', { x: relativeCoords.x, y: relativeCoords.y, color: strokeColor, strokeWidth });
 
-    // enregistre la couleur de l'utilisateur local
+    // enregistre la couleur et l'état de dessin de l'utilisateur local
     if (myUser?.id) {
       useUserListStore.getState().setUserStrokeColor(myUser.id, strokeColor);
+      useUserListStore.getState().setUserDrawing(myUser.id, true);
     }
 
     isDrawingRef.current = true;
