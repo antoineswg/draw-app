@@ -40,7 +40,7 @@ export function DrawArea() {
   const resizeTimerRef = useRef<number | null>(null);
 
   const { myUser } = useMyUserStore();
-  const { strokeWidth, strokeColor } = useDrawingStore();
+  const { strokeWidth, strokeColor, setExportCanvas } = useDrawingStore();
   const canUserDraw = useMemo(() => myUser !== null, [myUser]); 
   
   /**
@@ -112,6 +112,36 @@ export function DrawArea() {
       redrawAllStrokes(response.strokes as Array<{ points: Array<{ x: number; y: number }>; strokeWidth: number; color: string }>);
     }
   }, [redrawAllStrokes]);
+
+  // export du canvas en PNG avec fond blanc
+  const exportCanvasToPNG = useCallback(() => {
+    if (!canvasRef.current) return;
+    // création d'un canvas temporaire
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvasRef.current.width;
+    tempCanvas.height = canvasRef.current.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    if (!tempCtx) return;
+    // remplissage du fond en blanc
+    tempCtx.fillStyle = '#ffffff';
+    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    // copie du canvas original par-dessus
+    tempCtx.drawImage(canvasRef.current, 0, 0);
+    // conversion en data URL
+    const dataURL = tempCanvas.toDataURL('image/png');
+    // création d'un lien de téléchargement
+    const link = document.createElement('a');
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = String(now.getFullYear()).slice(-2);
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    link.download = `drawappCanvasExport-${day}${month}${year}_${hours}${minutes}${seconds}.png`;
+    link.href = dataURL;
+    link.click();
+  }, []);
 
   /**
    * ===================
@@ -272,6 +302,12 @@ export function DrawArea() {
   useEffect(() => {
     fetchStrokes();
   }, [fetchStrokes]);
+
+  useEffect(() => {
+    // enregistrement de la fonction d'export dans le store
+    setExportCanvas(exportCanvasToPNG);
+    return () => setExportCanvas(() => {});
+  }, [exportCanvasToPNG, setExportCanvas]);
 
   useEffect(() => {
     const handleServerDrawStart = (payload: unknown) => {
